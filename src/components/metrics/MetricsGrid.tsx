@@ -7,15 +7,15 @@ interface MetricsGridProps {
 }
 
 function fpsValueClass(fps: number): string {
-  if (fps < 30) return 'text-red-400'
-  if (fps > 55) return 'text-emerald-400'
-  return 'text-amber-400'
+  if (fps < 30) return 'text-danger'
+  if (fps > 55) return 'text-success'
+  return 'text-warn'
 }
 
 function fpsIconClass(fps: number): string {
-  if (fps < 30) return 'text-red-400'
-  if (fps > 55) return 'text-emerald-400'
-  return 'text-amber-400'
+  if (fps < 30) return 'text-danger'
+  if (fps > 55) return 'text-success'
+  return 'text-warn'
 }
 
 function formatThroughput(eventsPerSec: number): string {
@@ -63,8 +63,8 @@ export function MetricsGrid({ metrics }: MetricsGridProps) {
         unit="MB"
         description="Current JavaScript heap usage"
         icon={MemoryStick}
-        valueClassName="text-teal-300"
-        iconClassName="text-teal-400"
+        valueClassName="text-accent"
+        iconClassName="text-accent"
       />
     </section>
   )

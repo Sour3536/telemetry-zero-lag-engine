@@ -31,8 +31,11 @@ export function Sidebar({
   onNavigate,
 }: SidebarProps) {
   return (
-    <aside className="flex flex-col border-r border-slate-800 bg-slate-950 px-3 py-4">
-      <nav aria-label="Primary" className="flex flex-col gap-1">
+    <aside className="flex flex-col border-r border-line bg-panel px-3 py-5">
+      <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+        Navigation
+      </p>
+      <nav aria-label="Primary" className="flex flex-col gap-0.5">
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
           const isActive = activeItem === id
           return (
@@ -40,13 +43,23 @@ export function Sidebar({
               key={id}
               type="button"
               onClick={() => onNavigate?.(id)}
-              className={`flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors ${
+              aria-current={isActive ? 'page' : undefined}
+              className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                 isActive
-                  ? 'bg-slate-800 text-slate-100'
-                  : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+                  ? 'bg-elevated font-medium text-ink'
+                  : 'text-ink-soft hover:bg-elevated/60 hover:text-ink'
               }`}
             >
-              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {isActive ? (
+                <span
+                  className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent"
+                  aria-hidden="true"
+                />
+              ) : null}
+              <Icon
+                className={`h-4 w-4 shrink-0 ${isActive ? 'text-accent' : 'text-ink-muted'}`}
+                aria-hidden="true"
+              />
               {label}
             </button>
           )

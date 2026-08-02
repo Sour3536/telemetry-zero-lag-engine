@@ -16,32 +16,36 @@ export function MetricCard({
   unit,
   description,
   icon: Icon,
-  valueClassName = 'text-slate-100',
-  iconClassName = 'text-slate-400',
+  valueClassName = 'text-ink',
+  iconClassName = 'text-accent',
 }: MetricCardProps) {
   return (
-    <article className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900/40 p-5 shadow-lg shadow-black/20 backdrop-blur-md">
+    <article className="group relative overflow-hidden rounded-xl border border-line bg-panel p-5 transition-colors hover:border-line-strong">
       <div
-        className="pointer-events-none absolute inset-0 bg-linear-to-br from-white/5 to-transparent"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/15 to-transparent"
         aria-hidden="true"
       />
 
-      <div className="relative flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-400">
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-ink-muted">
             {title}
           </p>
-          <p className={`mt-2 flex items-baseline gap-1.5 text-3xl font-semibold tabular-nums tracking-tight ${valueClassName}`}>
+          <p
+            className={`mt-2.5 flex items-baseline gap-1.5 font-mono text-[1.75rem] font-semibold leading-none tracking-tight ${valueClassName}`}
+          >
             <span>{value}</span>
             {unit ? (
-              <span className="text-sm font-medium text-slate-500">{unit}</span>
+              <span className="font-sans text-xs font-medium text-ink-muted">
+                {unit}
+              </span>
             ) : null}
           </p>
-          <p className="mt-2 text-sm leading-snug text-slate-500">{description}</p>
+          <p className="mt-3 text-sm leading-snug text-ink-soft">{description}</p>
         </div>
 
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-slate-950/50">
-          <Icon className={`h-5 w-5 ${iconClassName}`} aria-hidden="true" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-elevated ring-1 ring-line">
+          <Icon className={`h-4 w-4 ${iconClassName}`} aria-hidden="true" />
         </div>
       </div>
     </article>
