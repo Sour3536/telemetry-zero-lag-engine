@@ -1,18 +1,18 @@
-import { Activity, Github } from 'lucide-react'
-import type { EngineMode } from '../types/telemetry'
+import { Activity } from "lucide-react";
+import type { EngineMode } from "../types/telemetry";
 
 interface HeaderProps {
-  engineMode: EngineMode
+  engineMode: EngineMode;
 }
 
 function statusLabel(mode: EngineMode): string {
-  if (mode === 'worker') return 'ENGINE: WORKER MODE'
-  if (mode === 'offscreen') return 'ENGINE: OFFSCREEN MODE'
-  return 'ENGINE: NAIVE MODE'
+  if (mode === "worker") return "ENGINE: WORKER MODE";
+  if (mode === "offscreen") return "ENGINE: OFFSCREEN MODE";
+  return "ENGINE: NAIVE MODE";
 }
 
 export function Header({ engineMode }: HeaderProps) {
-  const isWorker = engineMode === 'worker'
+  const isWorker = engineMode === "worker";
 
   return (
     <header className="col-span-full flex items-center justify-between border-b border-slate-800 bg-slate-950/80 px-6 py-3 backdrop-blur">
@@ -27,13 +27,13 @@ export function Header({ engineMode }: HeaderProps) {
         <span
           className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium tracking-wide ${
             isWorker
-              ? 'border-sky-500/40 bg-sky-500/10 text-sky-300'
-              : 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+              ? "border-sky-500/40 bg-sky-500/10 text-sky-300"
+              : "border-amber-500/40 bg-amber-500/10 text-amber-300"
           }`}
         >
           <span
             className={`h-1.5 w-1.5 rounded-full ${
-              isWorker ? 'bg-sky-400' : 'bg-amber-400'
+              isWorker ? "bg-sky-400" : "bg-amber-400"
             } animate-pulse`}
             aria-hidden="true"
           />
@@ -46,10 +46,10 @@ export function Header({ engineMode }: HeaderProps) {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:border-slate-500 hover:text-slate-100"
         >
-          <Github className="h-4 w-4" aria-hidden="true" />
+          {/* <GithubIcon className="h-4 w-4" aria-hidden="true" /> */}
           GitHub
         </a>
       </div>
     </header>
-  )
+  );
 }
