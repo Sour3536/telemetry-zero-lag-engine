@@ -31,8 +31,8 @@ export function Sidebar({
   onNavigate,
 }: SidebarProps) {
   return (
-    <aside className="flex flex-col border-r border-line bg-panel px-3 py-5">
-      <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+    <aside className="glass-panel-strong flex min-w-0 flex-col border-r border-white/8 px-2 py-4 sm:px-3 sm:py-5">
+      <p className="mb-2 hidden px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted sm:block">
         Navigation
       </p>
       <nav aria-label="Primary" className="flex flex-col gap-0.5">
@@ -42,12 +42,13 @@ export function Sidebar({
             <button
               key={id}
               type="button"
+              title={label}
               onClick={() => onNavigate?.(id)}
               aria-current={isActive ? 'page' : undefined}
-              className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+              className={`relative flex items-center justify-center gap-3 rounded-lg px-2 py-2.5 text-left text-sm transition-colors duration-150 sm:justify-start sm:px-3 ${
                 isActive
-                  ? 'bg-elevated font-medium text-ink'
-                  : 'text-ink-soft hover:bg-elevated/60 hover:text-ink'
+                  ? 'bg-elevated/80 font-medium text-ink'
+                  : 'text-ink-soft hover:bg-elevated/50 hover:text-ink'
               }`}
             >
               {isActive ? (
@@ -60,7 +61,7 @@ export function Sidebar({
                 className={`h-4 w-4 shrink-0 ${isActive ? 'text-accent' : 'text-ink-muted'}`}
                 aria-hidden="true"
               />
-              {label}
+              <span className="hidden truncate sm:inline">{label}</span>
             </button>
           )
         })}

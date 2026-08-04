@@ -48,32 +48,34 @@ function App() {
   const page = PAGE_COPY[activeNav]
 
   return (
-    <div className="grid min-h-svh grid-cols-[240px_1fr] grid-rows-[auto_1fr] bg-canvas font-sans text-ink">
+    <div className="grid min-h-svh grid-cols-[64px_minmax(0,1fr)] grid-rows-[auto_1fr] bg-canvas font-sans text-ink sm:grid-cols-[220px_minmax(0,1fr)]">
       <Header engineMode={controls.engineMode} />
       <Sidebar activeItem={activeNav} onNavigate={setActiveNav} />
-      <main className="overflow-auto bg-[radial-gradient(ellipse_at_top,_#1c2433_0%,_var(--color-canvas)_55%)] p-6 md:p-8">
-        <div className="mb-6 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight text-ink">
+      <main className="min-w-0 overflow-auto bg-[radial-gradient(ellipse_at_top,#1c2433_0%,var(--color-canvas)_55%)] p-4 sm:p-6 md:p-8">
+        <div className="mb-5 flex min-w-0 items-end justify-between gap-3 sm:mb-6 sm:gap-4">
+          <div className="min-w-0">
+            <h2 className="truncate text-lg font-semibold tracking-tight text-ink sm:text-xl">
               {page.title}
             </h2>
-            <p className="mt-1 max-w-xl text-sm text-ink-soft">{page.description}</p>
+            <p className="mt-1 line-clamp-2 max-w-xl text-sm text-ink-soft">
+              {page.description}
+            </p>
           </div>
           {activeNav === 'overview' ? (
-            <p className="hidden font-mono text-[11px] text-ink-muted sm:block">
+            <p className="hidden shrink-0 font-mono text-[11px] text-ink-muted md:block">
               SAMPLE RATE · 16ms
             </p>
           ) : null}
         </div>
 
         {activeNav === 'overview' && (
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-4 sm:space-y-6">
             <MetricsGrid metrics={metrics} />
             <ControlPanel controls={controls} onChange={setControls} />
           </div>
         )}
         {activeNav !== 'overview' && (
-          <div className="rounded-xl border border-dashed border-line bg-panel/60 px-6 py-16 text-center">
+          <div className="glass-panel rounded-xl border-dashed px-4 py-14 text-center sm:px-6 sm:py-16">
             <p className="text-sm text-ink-soft">
               {page.title} view coming next — scaffolding is ready.
             </p>
