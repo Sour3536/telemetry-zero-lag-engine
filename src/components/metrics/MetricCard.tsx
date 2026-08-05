@@ -1,14 +1,6 @@
-import type { LucideIcon } from 'lucide-react'
+import type { MetricCardProps } from '../../types/telemetry'
 
-interface MetricCardProps {
-  title: string
-  value: string
-  unit?: string
-  description: string
-  icon: LucideIcon
-  valueClassName?: string
-  iconClassName?: string
-}
+export type { MetricCardProps }
 
 export function MetricCard({
   title,

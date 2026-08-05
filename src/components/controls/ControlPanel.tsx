@@ -1,16 +1,22 @@
 import { Play, Square } from 'lucide-react'
-import type { EngineMode } from '../../types/telemetry'
+import type {
+  ArchitectureMode,
+  ControlPanelProps,
+  SimulationControls,
+} from '../../types/telemetry'
 
-export interface SimulationControls {
-  targetEventRate: number
-  engineMode: EngineMode
-  batchSize: number
-  isRunning: boolean
-}
+export type { ControlPanelProps, SimulationControls }
 
-interface ControlPanelProps {
-  controls: SimulationControls
-  onChange: (next: SimulationControls) => void
+interface SliderFieldProps {
+  id: string
+  label: string
+  valueLabel: string
+  min: number
+  max: number
+  step: number
+  value: number
+  onChange: (value: number) => void
+  hint: string
 }
 
 const EVENT_RATE_MIN = 100
@@ -32,17 +38,7 @@ function SliderField({
   value,
   onChange,
   hint,
-}: {
-  id: string
-  label: string
-  valueLabel: string
-  min: number
-  max: number
-  step: number
-  value: number
-  onChange: (value: number) => void
-  hint: string
-}) {
+}: SliderFieldProps) {
   return (
     <div className="min-w-0 space-y-2">
       <div className="flex min-w-0 items-end justify-between gap-2">
@@ -73,7 +69,7 @@ function SliderField({
 
 export function ControlPanel({ controls, onChange }: ControlPanelProps) {
   const { targetEventRate, engineMode, batchSize, isRunning } = controls
-  const architectureMode: Extract<EngineMode, 'naive' | 'worker'> =
+  const architectureMode: ArchitectureMode =
     engineMode === 'worker' ? 'worker' : 'naive'
 
   const patch = (partial: Partial<SimulationControls>) => {

@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import {
-  ControlPanel,
-  type SimulationControls,
-} from './components/controls/ControlPanel'
+import { ControlPanel } from './components/controls/ControlPanel'
 import { Header } from './components/Header'
 import { MetricsGrid } from './components/metrics/MetricsGrid'
-import { Sidebar, type NavItemId } from './components/Sidebar'
-import type { SystemMetrics } from './types/telemetry'
+import { Sidebar } from './components/Sidebar'
+import type {
+  NavItemId,
+  SimulationControls,
+  SystemMetrics,
+} from './types/telemetry'
 
 const INITIAL_METRICS: SystemMetrics = {
   fps: 58,

@@ -1,9 +1,7 @@
 import { Activity } from 'lucide-react'
-import type { EngineMode } from '../types/telemetry'
+import type { EngineMode, HeaderProps } from '../types/telemetry'
 
-interface HeaderProps {
-  engineMode: EngineMode
-}
+export type { HeaderProps }
 
 function statusLabel(mode: EngineMode): string {
   if (mode === 'worker') return 'ENGINE: WORKER MODE'

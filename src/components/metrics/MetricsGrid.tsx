@@ -1,10 +1,8 @@
 import { Cpu, Gauge, MemoryStick, Zap } from 'lucide-react'
-import type { SystemMetrics } from '../../types/telemetry'
+import type { MetricsGridProps } from '../../types/telemetry'
 import { MetricCard } from './MetricCard'
 
-interface MetricsGridProps {
-  metrics: SystemMetrics
-}
+export type { MetricsGridProps }
 
 function fpsValueClass(fps: number): string {
   if (fps < 30) return 'text-danger'

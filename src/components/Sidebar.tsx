@@ -5,8 +5,9 @@ import {
   Settings,
   type LucideIcon,
 } from 'lucide-react'
+import type { NavItemId, SidebarProps } from '../types/telemetry'
 
-export type NavItemId = 'overview' | 'benchmarks' | 'worker-logs' | 'settings'
+export type { NavItemId, SidebarProps }
 
 interface NavItem {
   id: NavItemId
@@ -14,17 +15,12 @@ interface NavItem {
   icon: LucideIcon
 }
 
-const NAV_ITEMS: NavItem[] = [
+const NAV_ITEMS: readonly NavItem[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'benchmarks', label: 'Benchmarks', icon: BarChart3 },
   { id: 'worker-logs', label: 'Worker Logs', icon: ScrollText },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
-
-interface SidebarProps {
-  activeItem?: NavItemId
-  onNavigate?: (id: NavItemId) => void
-}
 
 export function Sidebar({
   activeItem = 'overview',
