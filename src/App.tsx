@@ -4,6 +4,7 @@ import { ControlPanel } from './components/controls/ControlPanel'
 import { Header } from './components/Header'
 import { MetricsGrid } from './components/metrics/MetricsGrid'
 import { Sidebar } from './components/Sidebar'
+import { usePerformanceMonitor } from './hooks/usePerformanceMonitor'
 import type {
   NavItemId,
   SimulationControls,
@@ -11,13 +12,6 @@ import type {
   TelemetryPacket,
 } from './types/telemetry'
 import { NaiveSimulator } from './utils/naiveSimulator'
-
-const INITIAL_METRICS: SystemMetrics = {
-  fps: 0,
-  eventCount: 0,
-  memoryUsageMb: 0,
-  mainThreadLatencyMs: 0,
-}
 
 const INITIAL_CONTROLS: SimulationControls = {
   targetEventRate: 10_000,
@@ -45,23 +39,23 @@ const PAGE_COPY: Record<NavItemId, { title: string; description: string }> = {
   },
 }
 
-function readHeapMb(): number {
-  const perf = performance as Performance & {
-    memory?: { usedJSHeapSize: number }
-  }
-  if (!perf.memory) return 0
-  return perf.memory.usedJSHeapSize / (1024 * 1024)
-}
-
 function App() {
   const [activeNav, setActiveNav] = useState<NavItemId>('overview')
-  const [metrics, setMetrics] = useState<SystemMetrics>(INITIAL_METRICS)
+  const [throughput, setThroughput] = useState(0)
   const [packets, setPackets] = useState<TelemetryPacket[]>([])
   const [controls, setControls] = useState<SimulationControls>(INITIAL_CONTROLS)
 
+  const perfSnapshot = usePerformanceMonitor(true)
+
   const simulatorRef = useRef<NaiveSimulator | null>(null)
-  const frameTimestampsRef = useRef<number[]>([])
   const eventsWindowRef = useRef<{ ts: number; count: number }[]>([])
+
+  const metrics: SystemMetrics = {
+    fps: perfSnapshot.fps,
+    eventCount: throughput,
+    memoryUsageMb: perfSnapshot.memoryUsageMb,
+    mainThreadLatencyMs: perfSnapshot.mainThreadLatencyMs,
+  }
 
   // Keep a stable simulator instance; wire onBatch to force sync React updates.
   useEffect(() => {
@@ -69,33 +63,18 @@ function App() {
       rate: controls.targetEventRate,
       batchSize: controls.batchSize,
       onBatch: (batch) => {
-        const workStarted = performance.now()
-
         // Intentionally flush every batch so React commits immediately on the
         // main thread — no offloading, no deferred/batched UI updates.
         flushSync(() => {
           setPackets(batch)
 
           const now = performance.now()
-          const frames = frameTimestampsRef.current
-          frames.push(now)
-          while (frames.length > 0 && now - frames[0] > 1000) {
-            frames.shift()
-          }
-
           const events = eventsWindowRef.current
           events.push({ ts: now, count: batch.length })
           while (events.length > 0 && now - events[0].ts > 1000) {
             events.shift()
           }
-          const throughput = events.reduce((sum, e) => sum + e.count, 0)
-
-          setMetrics({
-            fps: frames.length,
-            eventCount: throughput,
-            memoryUsageMb: readHeapMb(),
-            mainThreadLatencyMs: performance.now() - workStarted,
-          })
+          setThroughput(events.reduce((sum, e) => sum + e.count, 0))
         })
       },
     })
@@ -119,14 +98,13 @@ function App() {
       controls.isRunning && controls.engineMode === 'naive'
 
     if (shouldRun && !simulator.isRunning()) {
-      frameTimestampsRef.current = []
       eventsWindowRef.current = []
       simulator.start()
     } else if (!shouldRun && simulator.isRunning()) {
       simulator.stop()
       flushSync(() => {
         setPackets([])
-        setMetrics(INITIAL_METRICS)
+        setThroughput(0)
       })
     }
   }, [controls.isRunning, controls.engineMode])
