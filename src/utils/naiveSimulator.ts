@@ -91,6 +91,17 @@ function logLongTask(
  * Main-thread telemetry generator.
  * Intentionally blocks the UI path: each batch is produced with rAF/setInterval
  * and delivered synchronously so React can be forced to re-render immediately.
+ *
+ * ---------------------------------------------------------------------------
+ * Observed baseline metrics (naive path, no worker offload)
+ * ---------------------------------------------------------------------------
+ * Under ~10,000 msg/sec load with flushSync React updates + Canvas redraw:
+ *   - FPS drops to roughly 10–50 FPS (well below the 60 FPS target)
+ *   - Main Thread Blocking spikes up to ~100ms (long tasks / jank visible)
+ *
+ * Use these numbers as the before-optimization baseline when comparing against
+ * Web Worker / OffscreenCanvas modes in benchmarks.
+ * ---------------------------------------------------------------------------
  */
 export class NaiveSimulator {
   private rate: number
