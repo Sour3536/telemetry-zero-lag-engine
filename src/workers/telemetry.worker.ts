@@ -4,11 +4,12 @@
  * Telemetry stream Web Worker.
  * Packet generation runs entirely off the main thread.
  */
-import type { TelemetryPacket } from '../types/telemetry'
 import type {
-  TelemetryWorkerInboundMessage,
-  TelemetryWorkerOutboundMessage,
-} from './telemetryMessages'
+  TelemetryPacket,
+  WorkerIncomingMessage,
+  WorkerOutgoingMessage,
+  WorkerStats,
+} from '../types/telemetry'
 
 const METRIC_NAMES = [
   'cpu.util',
@@ -40,15 +41,17 @@ let timerId: ReturnType<typeof setInterval> | null = null
 let lastTickTs = 0
 let carry = 0
 let seq = 0
+let packetsEmitted = 0
 
-const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope
+const ctx: DedicatedWorkerGlobalScope =
+  self as unknown as DedicatedWorkerGlobalScope
 
 function clampRate(next: number): number {
   return Math.min(RATE_MAX, Math.max(RATE_MIN, Math.round(next)))
 }
 
-function post(message: TelemetryWorkerOutboundMessage): void {
-  ctx.postMessage(message)
+function post(message: WorkerOutgoingMessage): void {
+  ctx.postMessage(message satisfies WorkerOutgoingMessage)
 }
 
 function createPacket(now: number, sequence: number): TelemetryPacket {
@@ -69,13 +72,29 @@ function createBatch(size: number, now: number): TelemetryPacket[] {
   return packets
 }
 
-function postStatus(): void {
-  post({
-    type: 'STATUS',
+function currentStats(): WorkerStats {
+  return {
     running,
     rate,
     batchSize,
+    packetsEmitted,
+  }
+}
+
+function postStats(): void {
+  post({
+    type: 'WORKER_STATS',
+    stats: currentStats(),
   })
+}
+
+function applyConfig(nextRate?: number, nextBatchSize?: number): void {
+  if (typeof nextRate === 'number') {
+    rate = clampRate(nextRate)
+  }
+  if (typeof nextBatchSize === 'number') {
+    batchSize = Math.max(1, Math.round(nextBatchSize))
+  }
 }
 
 function stopStream(): void {
@@ -86,7 +105,7 @@ function stopStream(): void {
   }
   lastTickTs = 0
   carry = 0
-  postStatus()
+  postStats()
 }
 
 function tick(): void {
@@ -103,24 +122,24 @@ function tick(): void {
   while (remaining > 0) {
     const size = Math.min(batchSize, remaining)
     const packets = createBatch(size, now)
-    post({
-      type: 'BATCH',
+    packetsEmitted += packets.length
+
+    const batchMessage: WorkerOutgoingMessage = {
+      type: 'TELEMETRY_BATCH',
       packets,
       producedAt: now,
       packetCount: packets.length,
-    })
+    }
+    post(batchMessage)
     remaining -= size
   }
 }
 
 function startStream(nextRate?: number, nextBatchSize?: number): void {
-  if (typeof nextRate === 'number') rate = clampRate(nextRate)
-  if (typeof nextBatchSize === 'number') {
-    batchSize = Math.max(1, Math.round(nextBatchSize))
-  }
+  applyConfig(nextRate, nextBatchSize)
 
   if (running) {
-    postStatus()
+    postStats()
     return
   }
 
@@ -128,35 +147,45 @@ function startStream(nextRate?: number, nextBatchSize?: number): void {
   lastTickTs = performance.now()
   carry = 0
   timerId = setInterval(tick, TICK_MS)
-  postStatus()
+  postStats()
 }
 
-ctx.onmessage = (event: MessageEvent<TelemetryWorkerInboundMessage>) => {
-  const message = event.data
-
+function handleIncoming(message: WorkerIncomingMessage): void {
   switch (message.type) {
-    case 'START_STREAM':
+    case 'START':
       startStream(message.rate, message.batchSize)
       break
-    case 'STOP_STREAM':
+    case 'STOP':
       stopStream()
       break
-    case 'UPDATE_RATE':
-      rate = clampRate(message.rate)
-      postStatus()
-      break
-    case 'SET_BATCH_SIZE':
-      batchSize = Math.max(1, Math.round(message.batchSize))
-      postStatus()
+    case 'CONFIG_CHANGE':
+      applyConfig(message.rate, message.batchSize)
+      postStats()
       break
     default: {
       const _exhaustive: never = message
       post({
         type: 'ERROR',
+        code: 'UNKNOWN_MESSAGE',
         message: `Unknown worker control message: ${JSON.stringify(_exhaustive)}`,
       })
     }
   }
 }
 
-postStatus()
+ctx.onmessage = (event: MessageEvent<WorkerIncomingMessage>) => {
+  const message = event.data
+
+  if (!message || typeof message !== 'object' || !('type' in message)) {
+    post({
+      type: 'ERROR',
+      code: 'INVALID_PAYLOAD',
+      message: 'WorkerIncomingMessage payload is missing a type discriminant',
+    })
+    return
+  }
+
+  handleIncoming(message)
+}
+
+postStats()
