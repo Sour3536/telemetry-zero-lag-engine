@@ -29,6 +29,12 @@ export function useTelemetryWorker(): UseTelemetryWorkerResult {
   const [workerStats, setWorkerStats] = useState<WorkerStats | null>(null)
   const [lastError, setLastError] = useState<string | null>(null)
 
+  // Stable control fns so consumers can safely list them in effect deps.
+  const startRef = useRef<(rate?: number, batchSize?: number) => void>(() => {})
+  const stopRef = useRef<() => void>(() => {})
+  const setRateRef = useRef<(rate: number) => void>(() => {})
+  const setBatchSizeRef = useRef<(batchSize: number) => void>(() => {})
+
   useEffect(() => {
     const worker = createTelemetryWorker()
     workerRef.current = worker
@@ -76,7 +82,7 @@ export function useTelemetryWorker(): UseTelemetryWorkerResult {
     }
   }, [])
 
-  const start = (rate?: number, batchSize?: number) => {
+  startRef.current = (rate?: number, batchSize?: number) => {
     setLastError(null)
     workerRef.current?.postMessage({
       type: 'START',
@@ -85,34 +91,49 @@ export function useTelemetryWorker(): UseTelemetryWorkerResult {
     })
   }
 
-  const stop = () => {
+  stopRef.current = () => {
     workerRef.current?.postMessage({ type: 'STOP' })
     setLatestBatch([])
     setIsWorkerRunning(false)
   }
 
-  const setRate = (rate: number) => {
+  setRateRef.current = (rate: number) => {
     workerRef.current?.postMessage({
       type: 'CONFIG_CHANGE',
       rate,
     })
   }
 
-  const setBatchSize = (batchSize: number) => {
+  setBatchSizeRef.current = (batchSize: number) => {
     workerRef.current?.postMessage({
       type: 'CONFIG_CHANGE',
       batchSize,
     })
   }
 
+  const controlsRef = useRef({
+    start: (rate?: number, batchSize?: number) => {
+      startRef.current(rate, batchSize)
+    },
+    stop: () => {
+      stopRef.current()
+    },
+    setRate: (rate: number) => {
+      setRateRef.current(rate)
+    },
+    setBatchSize: (batchSize: number) => {
+      setBatchSizeRef.current(batchSize)
+    },
+  })
+
   return {
     latestBatch,
     isWorkerRunning,
     workerStats,
     lastError,
-    start,
-    stop,
-    setRate,
-    setBatchSize,
+    start: controlsRef.current.start,
+    stop: controlsRef.current.stop,
+    setRate: controlsRef.current.setRate,
+    setBatchSize: controlsRef.current.setBatchSize,
   }
 }

@@ -1,11 +1,13 @@
 import { useLayoutEffect, useRef } from 'react'
-import type { TelemetryPacket } from '../../types/telemetry'
+import type { ArchitectureMode, TelemetryPacket } from '../../types/telemetry'
 
 export interface NaiveChartProps {
   /** Latest telemetry batch from React state — redraws on every update. */
   data: TelemetryPacket[]
   throughput: number
   memoryUsageMb: number
+  /** Active stream architecture — updates chart chrome for mode comparison. */
+  engineMode?: ArchitectureMode
 }
 
 interface ChartPoint {
@@ -89,6 +91,7 @@ export function NaiveChart({
   data,
   throughput,
   memoryUsageMb,
+  engineMode = 'naive',
 }: NaiveChartProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const historyRef = useRef<ChartPoint[]>([])
@@ -181,20 +184,23 @@ export function NaiveChart({
 
   return (
     <section
-      aria-label="Naive live telemetry chart"
+      aria-label="Live telemetry chart"
       className="glass-panel glass-sheen relative overflow-hidden rounded-xl"
     >
       <div className="flex items-center justify-between gap-3 border-b border-white/8 px-3.5 py-2.5 sm:px-4">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold tracking-tight text-ink">
-            Naive Live Chart
+            {engineMode === 'worker' ? 'Worker Live Chart' : 'Naive Live Chart'}
           </h3>
           <p className="mt-0.5 truncate text-xs text-ink-soft">
-            Canvas 2D redraw on every React state tick — no rAF throttle.
+            {engineMode === 'worker'
+              ? 'Batches generated off-thread — main thread only renders.'
+              : 'Canvas 2D redraw on every React state tick — no rAF throttle.'}
           </p>
         </div>
         <span className="shrink-0 font-mono text-[11px] text-ink-muted">
-          BATCH · {data.length.toLocaleString()}
+          {engineMode === 'worker' ? 'WORKER' : 'NAIVE'} ·{' '}
+          {data.length.toLocaleString()}
         </span>
       </div>
       <div ref={containerRef} className="min-w-0 p-2 sm:p-3">

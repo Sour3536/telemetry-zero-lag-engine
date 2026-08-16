@@ -47,6 +47,8 @@ export interface SimulationControls {
 export interface ControlPanelProps {
   controls: SimulationControls
   onChange: (next: SimulationControls) => void
+  /** True when the offloaded worker stream is actively producing batches. */
+  isWorkerStreamLive?: boolean
 }
 
 export interface MetricsGridProps {
