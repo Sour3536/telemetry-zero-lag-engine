@@ -47,6 +47,8 @@ export interface SimulationControls {
 export interface ControlPanelProps {
   controls: SimulationControls
   onChange: (next: SimulationControls) => void
+  /** True when the offloaded worker stream is actively producing batches. */
+  isWorkerStreamLive?: boolean
 }
 
 export interface MetricsGridProps {
@@ -59,3 +61,40 @@ export interface SidebarProps {
   activeItem?: NavItemId
   onNavigate?: (id: NavItemId) => void
 }
+
+/** Live stats reported by the telemetry Web Worker. */
+export interface WorkerStats {
+  running: boolean
+  rate: number
+  batchSize: number
+  packetsEmitted: number
+}
+
+/**
+ * Control commands sent from the main thread → Web Worker.
+ * Keep payloads JSON-serializable (structured-clone friendly).
+ */
+export type WorkerIncomingMessage =
+  | { type: 'START'; rate?: number; batchSize?: number }
+  | { type: 'STOP' }
+  | { type: 'CONFIG_CHANGE'; rate?: number; batchSize?: number }
+
+/**
+ * Data / status messages emitted from the Web Worker → main thread.
+ */
+export type WorkerOutgoingMessage =
+  | {
+      type: 'TELEMETRY_BATCH'
+      packets: TelemetryPacket[]
+      producedAt: number
+      packetCount: number
+    }
+  | {
+      type: 'WORKER_STATS'
+      stats: WorkerStats
+    }
+  | {
+      type: 'ERROR'
+      message: string
+      code?: string
+    }

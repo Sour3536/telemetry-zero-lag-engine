@@ -6,7 +6,9 @@ import { NaiveChart } from './components/charts/NaiveChart'
 import { MetricsGrid } from './components/metrics/MetricsGrid'
 import { Sidebar } from './components/Sidebar'
 import { usePerformanceMonitor } from './hooks/usePerformanceMonitor'
+import { useTelemetryWorker } from './hooks/useTelemetryWorker'
 import type {
+  ArchitectureMode,
   NavItemId,
   SimulationControls,
   SystemMetrics,
@@ -79,30 +81,59 @@ function logAppLongTask(event: LongTaskTelemetryEvent): void {
   console.warn('[App] main-thread long task', event)
 }
 
+function recordThroughput(
+  eventsWindow: { ts: number; count: number }[],
+  packetCount: number,
+): number {
+  const now = performance.now()
+  eventsWindow.push({ ts: now, count: packetCount })
+  while (eventsWindow.length > 0 && now - eventsWindow[0].ts > 1000) {
+    eventsWindow.shift()
+  }
+  return eventsWindow.reduce((sum, entry) => sum + entry.count, 0)
+}
+
 function App() {
   const [activeNav, setActiveNav] = useState<NavItemId>('overview')
-  const [throughput, setThroughput] = useState(0)
-  const [packets, setPackets] = useState<TelemetryPacket[]>([])
+  const [naiveThroughput, setNaiveThroughput] = useState(0)
+  const [naivePackets, setNaivePackets] = useState<TelemetryPacket[]>([])
+  const [workerThroughput, setWorkerThroughput] = useState(0)
   const [controls, setControls] = useState<SimulationControls>(INITIAL_CONTROLS)
 
   const perfSnapshot = usePerformanceMonitor(true)
+  const {
+    latestBatch,
+    isWorkerRunning,
+    start: startWorker,
+    stop: stopWorker,
+    setRate: setWorkerRate,
+    setBatchSize: setWorkerBatchSize,
+  } = useTelemetryWorker()
 
   const simulatorRef = useRef<NaiveSimulator | null>(null)
-  const eventsWindowRef = useRef<{ ts: number; count: number }[]>([])
+  const naiveEventsRef = useRef<{ ts: number; count: number }[]>([])
+  const workerEventsRef = useRef<{ ts: number; count: number }[]>([])
   const controlsRef = useRef(controls)
   const batchSeqRef = useRef(0)
-  const longTaskObserverRef = useRef<PerformanceObserver | null>(null)
+  const workerArmedRef = useRef(false)
 
   controlsRef.current = controls
 
+  const architectureMode: ArchitectureMode =
+    controls.engineMode === 'worker' ? 'worker' : 'naive'
+  const isWorkerMode = architectureMode === 'worker'
+
+  const activePackets = isWorkerMode ? latestBatch : naivePackets
+  const activeThroughput = isWorkerMode ? workerThroughput : naiveThroughput
+
   const metrics: SystemMetrics = {
     fps: perfSnapshot.fps,
-    eventCount: throughput,
+    eventCount: activeThroughput,
     memoryUsageMb: perfSnapshot.memoryUsageMb,
     mainThreadLatencyMs: perfSnapshot.mainThreadLatencyMs,
   }
 
-  // Keep a stable simulator instance; wire onBatch to force sync React updates.
+  // Keep a stable naive simulator instance (main-thread path only).
   useEffect(() => {
     const simulator = new NaiveSimulator({
       rate: controls.targetEventRate,
@@ -120,15 +151,10 @@ function App() {
         // main thread — no offloading, no deferred/batched UI updates.
         flushSync(() => {
           performance.mark(`app:state-update-start:${seq}`)
-          setPackets(batch)
-
-          const now = performance.now()
-          const events = eventsWindowRef.current
-          events.push({ ts: now, count: batch.length })
-          while (events.length > 0 && now - events[0].ts > 1000) {
-            events.shift()
-          }
-          setThroughput(events.reduce((sum, e) => sum + e.count, 0))
+          setNaivePackets(batch)
+          setNaiveThroughput(
+            recordThroughput(naiveEventsRef.current, batch.length),
+          )
           performance.mark(`app:state-update-end:${seq}`)
         })
 
@@ -169,15 +195,24 @@ function App() {
       simulator.stop()
       simulatorRef.current = null
     }
-    // Simulator is created once; rate/batch updates go through methods below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Observe browser long tasks while operating above the high-rate baseline.
+  // Consume worker batches on the main thread (no flushSync — UI stays lighter).
+  useEffect(() => {
+    if (!isWorkerMode || !controls.isRunning) return
+    if (latestBatch.length === 0) return
+
+    setWorkerThroughput(
+      recordThroughput(workerEventsRef.current, latestBatch.length),
+    )
+  }, [latestBatch, isWorkerMode, controls.isRunning])
+
+  // Observe browser long tasks while naive high-rate baseline is active.
   useEffect(() => {
     const shouldObserve =
       controls.isRunning &&
-      controls.engineMode === 'naive' &&
+      architectureMode === 'naive' &&
       controls.targetEventRate > HIGH_RATE_THRESHOLD
 
     if (!shouldObserve || typeof PerformanceObserver === 'undefined') {
@@ -208,7 +243,6 @@ function App() {
         buffered: true,
       } as PerformanceObserverInit)
 
-      longTaskObserverRef.current = observer
       console.info(
         `[App] long-task observer armed (rate ${controls.targetEventRate} > ${HIGH_RATE_THRESHOLD} msg/s)`,
       )
@@ -221,24 +255,22 @@ function App() {
 
     return () => {
       observer.disconnect()
-      longTaskObserverRef.current = null
     }
   }, [
     controls.isRunning,
-    controls.engineMode,
+    architectureMode,
     controls.targetEventRate,
   ])
 
-  // Start / stop based on controls — naive path only for now.
+  // Naive main-thread simulator lifecycle.
   useEffect(() => {
     const simulator = simulatorRef.current
     if (!simulator) return
 
-    const shouldRun =
-      controls.isRunning && controls.engineMode === 'naive'
+    const shouldRun = controls.isRunning && architectureMode === 'naive'
 
     if (shouldRun && !simulator.isRunning()) {
-      eventsWindowRef.current = []
+      naiveEventsRef.current = []
       batchSeqRef.current = 0
       performance.mark('app:sim-run-start')
       simulator.start()
@@ -260,25 +292,63 @@ function App() {
       }
 
       flushSync(() => {
-        setPackets([])
-        setThroughput(0)
+        setNaivePackets([])
+        setNaiveThroughput(0)
       })
     }
-  }, [controls.isRunning, controls.engineMode])
+  }, [controls.isRunning, architectureMode])
 
-  // Push live rate / batch size into the running simulator (no restart).
+  // Web Worker offload lifecycle — stop naive path is handled above.
   useEffect(() => {
-    const simulator = simulatorRef.current
-    if (!simulator) return
-    simulator.updateRate(controls.targetEventRate)
-    simulator.updateBatchSize(controls.batchSize)
+    const shouldRun = controls.isRunning && architectureMode === 'worker'
 
-    if (controls.targetEventRate > HIGH_RATE_THRESHOLD && controls.isRunning) {
-      console.info(
-        `[App] high-rate baseline active: ${controls.targetEventRate} msg/s — logging main-thread long tasks ≥ ${LONG_TASK_MS}ms`,
-      )
+    if (shouldRun && !workerArmedRef.current) {
+      workerEventsRef.current = []
+      setWorkerThroughput(0)
+      workerArmedRef.current = true
+      startWorker(controls.targetEventRate, controls.batchSize)
+    } else if (!shouldRun && workerArmedRef.current) {
+      workerArmedRef.current = false
+      stopWorker()
+      setWorkerThroughput(0)
     }
-  }, [controls.targetEventRate, controls.batchSize, controls.isRunning])
+  }, [
+    controls.isRunning,
+    architectureMode,
+    controls.targetEventRate,
+    controls.batchSize,
+    startWorker,
+    stopWorker,
+  ])
+
+  // Push live rate / batch size into the active engine (no stream restart).
+  useEffect(() => {
+    if (!controls.isRunning) return
+
+    if (architectureMode === 'naive') {
+      const simulator = simulatorRef.current
+      if (!simulator) return
+      simulator.updateRate(controls.targetEventRate)
+      simulator.updateBatchSize(controls.batchSize)
+
+      if (controls.targetEventRate > HIGH_RATE_THRESHOLD) {
+        console.info(
+          `[App] high-rate baseline active: ${controls.targetEventRate} msg/s — logging main-thread long tasks ≥ ${LONG_TASK_MS}ms`,
+        )
+      }
+      return
+    }
+
+    setWorkerRate(controls.targetEventRate)
+    setWorkerBatchSize(controls.batchSize)
+  }, [
+    controls.targetEventRate,
+    controls.batchSize,
+    controls.isRunning,
+    architectureMode,
+    setWorkerRate,
+    setWorkerBatchSize,
+  ])
 
   const page = PAGE_COPY[activeNav]
 
@@ -298,7 +368,8 @@ function App() {
           </div>
           {activeNav === 'overview' ? (
             <p className="hidden shrink-0 font-mono text-[11px] text-ink-muted md:block">
-              LAST BATCH · {packets.length.toLocaleString()} pkts
+              {isWorkerMode ? 'WORKER' : 'NAIVE'} · LAST BATCH ·{' '}
+              {activePackets.length.toLocaleString()} pkts
             </p>
           ) : null}
         </div>
@@ -306,11 +377,16 @@ function App() {
         {activeNav === 'overview' && (
           <div className="min-w-0 space-y-4 sm:space-y-6">
             <MetricsGrid metrics={metrics} />
-            <ControlPanel controls={controls} onChange={setControls} />
+            <ControlPanel
+              controls={controls}
+              onChange={setControls}
+              isWorkerStreamLive={isWorkerRunning}
+            />
             <NaiveChart
-              data={packets}
-              throughput={throughput}
+              data={activePackets}
+              throughput={activeThroughput}
               memoryUsageMb={metrics.memoryUsageMb}
+              engineMode={architectureMode}
             />
           </div>
         )}

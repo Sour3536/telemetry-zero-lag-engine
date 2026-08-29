@@ -67,13 +67,23 @@ function SliderField({
   )
 }
 
-export function ControlPanel({ controls, onChange }: ControlPanelProps) {
+export function ControlPanel({
+  controls,
+  onChange,
+  isWorkerStreamLive = false,
+}: ControlPanelProps) {
   const { targetEventRate, engineMode, batchSize, isRunning } = controls
   const architectureMode: ArchitectureMode =
     engineMode === 'worker' ? 'worker' : 'naive'
+  const streamLive =
+    isRunning && (architectureMode === 'worker' ? isWorkerStreamLive : true)
 
   const patch = (partial: Partial<SimulationControls>) => {
     onChange({ ...controls, ...partial })
+  }
+
+  const selectMode = (mode: ArchitectureMode) => {
+    patch({ engineMode: mode })
   }
 
   return (
@@ -94,18 +104,22 @@ export function ControlPanel({ controls, onChange }: ControlPanelProps) {
         <div className="flex shrink-0 flex-wrap items-center gap-1.5 sm:gap-2">
           <span
             className={`inline-flex items-center gap-2 rounded-md border px-2 py-1 font-mono text-[11px] font-medium ${
-              isRunning
+              streamLive
                 ? 'border-success/30 bg-success/10 text-success'
                 : 'border-white/10 bg-elevated/70 text-ink-muted'
             }`}
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${
-                isRunning ? 'animate-pulse bg-success' : 'bg-ink-muted'
+                streamLive ? 'animate-pulse bg-success' : 'bg-ink-muted'
               }`}
               aria-hidden="true"
             />
-            {isRunning ? 'RUNNING' : 'STOPPED'}
+            {streamLive
+              ? architectureMode === 'worker'
+                ? 'RUNNING · WORKER'
+                : 'RUNNING · NAIVE'
+              : 'STOPPED'}
           </span>
 
           <button
@@ -175,7 +189,7 @@ export function ControlPanel({ controls, onChange }: ControlPanelProps) {
           >
             <button
               type="button"
-              onClick={() => patch({ engineMode: 'naive' })}
+              onClick={() => selectMode('naive')}
               aria-pressed={architectureMode === 'naive'}
               className={`rounded-lg border px-3 py-2.5 text-left transition-colors duration-150 ${
                 architectureMode === 'naive'
@@ -193,7 +207,7 @@ export function ControlPanel({ controls, onChange }: ControlPanelProps) {
 
             <button
               type="button"
-              onClick={() => patch({ engineMode: 'worker' })}
+              onClick={() => selectMode('worker')}
               aria-pressed={architectureMode === 'worker'}
               className={`rounded-lg border px-3 py-2.5 text-left transition-colors duration-150 ${
                 architectureMode === 'worker'
@@ -205,7 +219,8 @@ export function ControlPanel({ controls, onChange }: ControlPanelProps) {
                 Web Worker (Offloaded)
               </span>
               <span className="mt-1 line-clamp-2 block text-xs text-ink-muted">
-                Move parsing and aggregation off the main thread.
+                Generate packets off-thread via telemetry.worker — keeps UI
+                responsive.
               </span>
             </button>
           </div>
