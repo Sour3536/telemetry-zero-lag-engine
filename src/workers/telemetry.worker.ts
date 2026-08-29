@@ -3,7 +3,8 @@
 /**
  * Telemetry stream Web Worker.
  * Packet generation runs entirely off the main thread.
- * Packets accumulate in a preallocated CircularBuffer to avoid GC churn.
+ * Packets accumulate in a TypedArray SoA ring ({@link TelemetryPacketRing})
+ * to avoid GC churn at 10k+ msg/s.
  *
  * Flushing is cadence-throttled (~16ms / 60 FPS) so the main thread receives
  * at most a small number of postMessage payloads per frame — never one
@@ -15,7 +16,7 @@ import type {
   WorkerOutgoingMessage,
   WorkerStats,
 } from '../types/telemetry'
-import { CircularBuffer } from '../utils/CircularBuffer'
+import { TelemetryPacketRing } from '../utils/CircularBuffer'
 
 const METRIC_NAMES = [
   'cpu.util',
@@ -41,10 +42,7 @@ const RATE_MAX = 20_000
 /** Frame-aligned worker cadence (~60 FPS). Generation + flush share this tick. */
 const FRAME_INTERVAL_MS = 1000 / 60
 
-/**
- * ~0.8s of headroom at 20,000 msg/sec. Power-of-two optional; modulo is fine
- * at this size and keeps capacity explicit for profiling.
- */
+/** ~0.8s of headroom at 20,000 msg/sec (rounded up to power-of-two in the ring). */
 const PACKET_BUFFER_CAPACITY = 16_384
 
 /** Soft UI-configured batch preference (Control Panel). */
@@ -84,16 +82,17 @@ function createEmptyPacket(): TelemetryPacket {
   }
 }
 
-const packetBuffer = new CircularBuffer<TelemetryPacket>(
-  PACKET_BUFFER_CAPACITY,
-  createEmptyPacket,
-)
+const packetBuffer = new TelemetryPacketRing(PACKET_BUFFER_CAPACITY, {
+  metricNames: METRIC_NAMES,
+  deviceIds: DEVICE_IDS,
+})
 
-/** Reused drain target — length is fixed; only indices `[0, n)` are published. */
+/** Reused drain target — mutated in place by TelemetryPacketRing.drainTo. */
 const flushScratch: TelemetryPacket[] = new Array(PAYLOAD_PACKET_CEILING)
 for (let i = 0; i < PAYLOAD_PACKET_CEILING; i += 1) {
   flushScratch[i] = createEmptyPacket()
 }
+Object.seal(flushScratch)
 
 let rate = 10_000
 let batchSize = 64
@@ -114,13 +113,6 @@ function clampRate(next: number): number {
 
 function post(message: WorkerOutgoingMessage): void {
   ctx.postMessage(message satisfies WorkerOutgoingMessage)
-}
-
-function writePacket(slot: TelemetryPacket, now: number, sequence: number): void {
-  slot.timestamp = now
-  slot.metricName = METRIC_NAMES[sequence % METRIC_NAMES.length]
-  slot.value = Math.random() * 100
-  slot.deviceId = DEVICE_IDS[sequence % DEVICE_IDS.length]
 }
 
 function currentStats(): WorkerStats {
@@ -212,6 +204,7 @@ function flushBatches(producedAt: number, flushAll: boolean): void {
     const count = packetBuffer.drainTo(flushScratch, take)
     if (count === 0) break
 
+    // Shallow view for postMessage length — references preallocated scratch.
     const packets: TelemetryPacket[] = new Array(count)
     for (let i = 0; i < count; i += 1) {
       packets[i] = flushScratch[i] as TelemetryPacket
@@ -259,11 +252,16 @@ function tick(): void {
   let remaining = Math.floor(exactCount)
   carry = exactCount - remaining
 
-  // Accumulate into the preallocated ring — no per-packet object allocation.
-  // Full ring overwrites oldest via claim() (backpressure / drop-oldest).
+  // TypedArray SoA write path — no per-packet object allocation.
+  const metricCount = METRIC_NAMES.length
+  const deviceCount = DEVICE_IDS.length
   while (remaining > 0) {
-    const slot = packetBuffer.claim()
-    writePacket(slot, now, seq)
+    packetBuffer.push({
+      timestamp: now,
+      metricIndex: seq % metricCount,
+      value: Math.random() * 100,
+      deviceIndex: seq % deviceCount,
+    })
     seq += 1
     remaining -= 1
   }
